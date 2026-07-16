@@ -23,11 +23,21 @@ export default function Admin() {
   const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([])
   const [dataLoading, setDataLoading] = useState(false)
 
+  const handleLogout = async () => {
+    await logout()
+    navigate('/')
+  }
+
+  const handleMarkRead = async (id: string) => {
+    await markContactRead(id)
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, is_read: true } : m)))
+  }
+
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) {
+    if (!loading && !user) {
       navigate('/login')
     }
-  }, [user, isAdmin, loading, navigate])
+  }, [user, loading, navigate])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -44,16 +54,6 @@ export default function Admin() {
     }
   }, [activeTab, isAdmin])
 
-  const handleLogout = async () => {
-    await logout()
-    navigate('/')
-  }
-
-  const handleMarkRead = async (id: string) => {
-    await markContactRead(id)
-    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, is_read: true } : m)))
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-nova-deep flex items-center justify-center">
@@ -62,7 +62,25 @@ export default function Admin() {
     )
   }
 
-  if (!user || !isAdmin) return null
+  if (!user) return null
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-nova-deep flex flex-col items-center justify-center p-6">
+        <Sparkles className="w-16 h-16 text-nova-purple mb-6" />
+        <h1 className="text-2xl font-bold font-display mb-2">Access Denied</h1>
+        <p className="text-nova-gray mb-6 text-center max-w-md">
+          Admin access required. Contact your administrator to promote your account.
+        </p>
+        <button
+          onClick={handleLogout}
+          className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-nova-gray hover:text-white hover:border-nova-purple/30 transition-all"
+        >
+          Sign Out
+        </button>
+      </div>
+    )
+  }
 
   const unreadCount = messages.filter((m) => !m.is_read).length
 

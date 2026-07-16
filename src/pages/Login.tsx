@@ -26,7 +26,7 @@ export default function Login() {
         setError('Check your email for confirmation!')
       } else {
         await login(email, password)
-        navigate('/admin')
+        navigate('/')
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed')

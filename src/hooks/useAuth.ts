@@ -8,11 +8,14 @@ export function useAuth() {
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
+    const sb = supabase
+    if (!sb) { setLoading(false); return }
+
     const getSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
+        const { data: { session } } = await sb.auth.getSession()
         if (session?.user) {
-          const { data: profile } = await supabase
+          const { data: profile } = await sb
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
@@ -32,9 +35,9 @@ export function useAuth() {
 
     getSession()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        const { data: profile } = await supabase
+        const { data: profile } = await sb
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
@@ -55,11 +58,13 @@ export function useAuth() {
   }, [])
 
   const login = async (email: string, password: string) => {
+    if (!supabase) throw new Error('Backend not available')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
   }
 
   const register = async (email: string, password: string, fullName: string) => {
+    if (!supabase) throw new Error('Backend not available')
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -69,6 +74,7 @@ export function useAuth() {
   }
 
   const logout = async () => {
+    if (!supabase) return
     await supabase.auth.signOut()
     setUser(null)
     setIsAdmin(false)
