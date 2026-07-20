@@ -13,9 +13,735 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <title>Nova Studio — AI Creative Studio</title>
+
+    <!-- Claude Floating Assistant -->
+    <style>
+      /* ── Floating Icon ── */
+      #claude-assistant {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        width: 72px;
+        height: 72px;
+        z-index: 999999;
+        cursor: pointer;
+        border-radius: 50%;
+        filter: drop-shadow(0 0 14px rgba(216, 160, 74, 0.55))
+                drop-shadow(0 0 28px rgba(216, 160, 74, 0.25));
+        transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                    filter 0.25s ease;
+        animation: claude-bounce 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
+      }
+      #claude-assistant:hover {
+        transform: scale(1.15);
+        filter: drop-shadow(0 0 18px rgba(216, 160, 74, 0.7))
+                drop-shadow(0 0 36px rgba(216, 160, 74, 0.4));
+      }
+      #claude-assistant img {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        display: block;
+      }
+
+      @keyframes claude-bounce {
+        0%   { transform: scale(0.3); opacity: 0; }
+        50%  { transform: scale(1.12); opacity: 1; }
+        70%  { transform: scale(0.92); }
+        85%  { transform: scale(1.04); }
+        100% { transform: scale(1);    opacity: 1; }
+      }
+
+      /* ── Terminal Popup ── */
+      #claude-terminal {
+        position: fixed;
+        bottom: 110px;
+        right: 28px;
+        width: 380px;
+        max-width: calc(100vw - 56px);
+        max-height: 340px;
+        z-index: 999998;
+        background: #0a0a0a;
+        border: 1px solid rgba(0, 255, 100, 0.25);
+        border-radius: 12px;
+        box-shadow:
+          0 0 30px rgba(0, 255, 100, 0.08),
+          0 0 60px rgba(0, 255, 100, 0.04),
+          inset 0 0 30px rgba(0, 0, 0, 0.6);
+        overflow: hidden;
+        opacity: 0;
+        transform: translateY(12px);
+        pointer-events: none;
+        transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        font-family: 'Courier New', 'Fira Code', 'SF Mono', monospace;
+      }
+      #claude-terminal.open {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
+      /* scanline overlay */
+      #claude-terminal::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(0, 0, 0, 0.03) 0px,
+          rgba(0, 255, 100, 0.015) 1px,
+          transparent 2px,
+          transparent 4px
+        );
+        pointer-events: none;
+        z-index: 2;
+        animation: scanlines 8s linear infinite;
+      }
+      @keyframes scanlines {
+        0%   { background-position: 0 0; }
+        100% { background-position: 0 8px; }
+      }
+
+      /* subtle flicker */
+      @keyframes flicker {
+        0%, 100% { opacity: 1; }
+        92%  { opacity: 1; }
+        93%  { opacity: 0.94; }
+        94%  { opacity: 1; }
+        96%  { opacity: 0.96; }
+        97%  { opacity: 1; }
+      }
+      #claude-terminal.open {
+        animation: flicker 5s infinite;
+      }
+
+      #claude-terminal .terminal-header {
+        background: #111;
+        border-bottom: 1px solid rgba(0, 255, 100, 0.12);
+        padding: 8px 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+        z-index: 3;
+      }
+      #claude-terminal .terminal-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      #claude-terminal .terminal-dot.red   { background: #ff5f57; }
+      #claude-terminal .terminal-dot.yellow{ background: #febc2e; }
+      #claude-terminal .terminal-dot.green { background: #28c840; }
+      #claude-terminal .terminal-title {
+        flex: 1;
+        text-align: center;
+        color: rgba(0, 255, 100, 0.5);
+        font-size: 10px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+      }
+      #claude-terminal .terminal-body {
+        padding: 16px 18px;
+        color: #0f9;
+        font-size: 13px;
+        line-height: 1.6;
+        position: relative;
+        z-index: 3;
+        min-height: 80px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      #claude-terminal .terminal-body.prompt-line {
+        display: flex;
+        gap: 6px;
+      }
+      #claude-terminal .terminal-prompt {
+        color: #0f9;
+        user-select: none;
+      }
+      #claude-terminal .cursor-blink {
+        display: inline-block;
+        width: 8px;
+        height: 15px;
+        background: #0f9;
+        vertical-align: text-bottom;
+        margin-left: 2px;
+        animation: cursor-blink 1s step-end infinite;
+      }
+      @keyframes cursor-blink {
+        0%, 100% { opacity: 1; }
+        50%      { opacity: 0; }
+      }
+
+      @media (max-width: 480px) {
+        #claude-assistant {
+          bottom: 16px;
+          right: 16px;
+          width: 58px;
+          height: 58px;
+        }
+        #claude-terminal {
+          bottom: 84px;
+          right: 12px;
+          width: calc(100vw - 32px);
+          max-height: 380px;
+        }
+        #claude-terminal .terminal-body {
+          font-size: 11px;
+          padding: 12px 14px;
+        }
+        #claude-terminal .terminal-input {
+          font-size: 11px;
+          padding: 8px 12px;
+        }
+      }
+
+      /* ── Conversation messages ── */
+      #claude-terminal .terminal-body {
+        max-height: 240px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0,255,100,0.15) transparent;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      #claude-terminal .terminal-body::-webkit-scrollbar {
+        width: 4px;
+      }
+      #claude-terminal .terminal-body::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #claude-terminal .terminal-body::-webkit-scrollbar-thumb {
+        background: rgba(0,255,100,0.15);
+        border-radius: 2px;
+      }
+
+      #claude-terminal .msg-user {
+        color: #0ff;
+        padding-left: 2px;
+      }
+      #claude-terminal .msg-user .msg-prefix {
+        color: rgba(0,255,255,0.5);
+        margin-right: 4px;
+      }
+      #claude-terminal .msg-ai {
+        color: #0f9;
+        padding-left: 2px;
+      }
+      #claude-terminal .msg-ai .msg-prefix {
+        color: rgba(0,255,100,0.5);
+        margin-right: 4px;
+      }
+      #claude-terminal .msg-loading {
+        color: rgba(0,255,100,0.35);
+        font-style: italic;
+        animation: pulse-loading 1.2s ease-in-out infinite;
+      }
+      @keyframes pulse-loading {
+        0%, 100% { opacity: 0.35; }
+        50%      { opacity: 0.7; }
+      }
+
+      /* ── Input area ── */
+      #claude-terminal .terminal-input-area {
+        position: relative;
+        z-index: 3;
+        border-top: 1px solid rgba(0,255,100,0.1);
+        display: flex;
+        align-items: center;
+        padding: 0;
+      }
+      #claude-terminal .terminal-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #0f9;
+        font-family: inherit;
+        font-size: 13px;
+        padding: 10px 16px;
+        caret-color: #0f9;
+      }
+      #claude-terminal .terminal-input::placeholder {
+        color: rgba(0,255,100,0.25);
+      }
+      #claude-terminal .terminal-input:disabled {
+        opacity: 0.4;
+      }
+      #claude-terminal .terminal-send {
+        background: none;
+        border: none;
+        color: rgba(0,255,100,0.4);
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px;
+        padding: 10px 14px;
+        transition: color 0.2s;
+        white-space: nowrap;
+      }
+      #claude-terminal .terminal-send:hover {
+        color: #0f9;
+      }
+      #claude-terminal .terminal-send:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+
+      /* ── Loading bar ── */
+      #claude-terminal .loading-bar {
+        position: relative;
+        z-index: 3;
+        height: 2px;
+        background: rgba(0,255,100,0.08);
+        overflow: hidden;
+      }
+      #claude-terminal .loading-bar-fill {
+        height: 100%;
+        width: 30%;
+        background: linear-gradient(90deg, transparent, #0f9, transparent);
+        animation: loading-slide 1s ease-in-out infinite;
+      }
+      @keyframes loading-slide {
+        0%   { transform: translateX(-100%); }
+        100% { transform: translateX(430%); }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <div id="claude-assistant" role="button" aria-label="Claude AI Assistant" title="Claude AI Assistant" tabindex="0">
+      <img src="https://media.tenor.com/WvYJnr85GLoAAAAj/claude-claude-code.gif"
+           alt="Claude Code"
+           loading="lazy" />
+    </div>
+
+    <div id="claude-terminal">
+      <div class="terminal-header">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-title">Claude Terminal</span>
+      </div>
+      <div class="terminal-body" id="claude-terminal-body"></div>
+      <div class="loading-bar" id="claude-loading-bar" style="display:none">
+        <div class="loading-bar-fill"></div>
+      </div>
+      <div class="terminal-input-area">
+        <input type="text" class="terminal-input" id="claude-input"
+               placeholder="Ask Claude anything..."
+               autocomplete="off" spellcheck="false" />
+        <button class="terminal-send" id="claude-send" aria-label="Send">SEND</button>
+      </div>
+    </div>
+
+    <!-- Load API key from gitignored config -->
+    <script src="claude-config.js"></script>
+
+    <script>
+    (function () {
+      'use strict';
+
+      /* ─── Config ─── */
+      var OPENROUTER_KEY = window.CLAUDE_API_KEY || '';
+      var MODEL = 'openai/gpt-4o-mini';
+      var API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+      /* ─── 30+ unique Claude facts ─── */
+      var FACTS = [
+        'Claude Code understands very large codebases.',
+        'Claude Code excels at debugging complex issues.',
+        'Claude Code writes clean, maintainable code.',
+        'Claude Code has strong reasoning capabilities.',
+        'Claude Code performs excellent refactoring.',
+        'Claude Code explains complex code clearly.',
+        'Claude Code is ideal for AI-assisted development.',
+        'Claude Code helps reduce development time.',
+        'Claude Code is strong at multi-file editing.',
+        'Claude Code can analyze large repositories efficiently.',
+        'Claude Code generates comprehensive test suites.',
+        'Claude Code reviews pull requests thoroughly.',
+        'Claude Code can translate between programming languages.',
+        'Claude Code optimizes performance bottlenecks.',
+        'Claude Code documents codebases automatically.',
+        'Claude Code supports over 200+ languages.',
+        'Claude Code integrates with popular IDEs.',
+        'Claude Code remembers context across sessions.',
+        'Claude Code handles merge conflicts intelligently.',
+        'Claude Code suggests architectural improvements.',
+        'Claude Code detects security vulnerabilities.',
+        'Claude Code generates API documentation.',
+        'Claude Code can scaffold entire projects.',
+        'Claude Code understands monorepo structures.',
+        'Claude Code tracks down memory leaks.',
+        'Claude Code improves code readability.',
+        'Claude Code automates repetitive tasks.',
+        'Claude Code provides real-time code feedback.',
+        'Claude Code handles legacy code migrations.',
+        'Claude Code generates database migrations.',
+        'Claude Code explains regular expressions.',
+        'Claude Code converts designs into pixel-perfect code.'
+      ];
+
+      /* ─── State ─── */
+      var remainingFacts = [];
+      var isOpen = false;
+      var isLoading = false;
+      var typingTimer = null;
+      var conversation = [];
+
+      /* ─── DOM refs ─── */
+      var icon       = document.getElementById('claude-assistant');
+      var terminal   = document.getElementById('claude-terminal');
+      var bodyEl     = document.getElementById('claude-terminal-body');
+      var inputEl    = document.getElementById('claude-input');
+      var sendBtn    = document.getElementById('claude-send');
+      var loadingBar = document.getElementById('claude-loading-bar');
+
+      /* ─── Helpers ─── */
+      function shuffle(arr) {
+        var a = arr.slice();
+        for (var i = a.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+        }
+        return a;
+      }
+
+      function nextFact() {
+        if (remainingFacts.length === 0) remainingFacts = shuffle(FACTS);
+        return remainingFacts.pop();
+      }
+
+      function scrollToBottom() {
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+      }
+
+      /* ─── Web Audio sounds ─── */
+      var audioCtx = null;
+      function getAudioCtx() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        return audioCtx;
+      }
+
+      function playKeySound() {
+        try {
+          var ctx = getAudioCtx();
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(800 + Math.random() * 1200, ctx.currentTime);
+          gain.gain.setValueAtTime(0.03, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.03);
+        } catch (e) { /* silent */ }
+      }
+
+      function playCompletionSound() {
+        try {
+          var ctx = getAudioCtx();
+          var now = ctx.currentTime;
+          var notes = [523.25, 659.25, 783.99, 1046.5];
+          notes.forEach(function (freq, i) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + i * 0.08);
+            gain.gain.setValueAtTime(0, now + i * 0.08);
+            gain.gain.linearRampToValueAtTime(0.06, now + i * 0.08 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.18);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(now + i * 0.08); osc.stop(now + i * 0.08 + 0.2);
+          });
+          var pad = ctx.createOscillator();
+          var padGain = ctx.createGain();
+          pad.type = 'triangle'; pad.frequency.setValueAtTime(261.63, now);
+          padGain.gain.setValueAtTime(0.015, now);
+          padGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+          pad.connect(padGain); padGain.connect(ctx.destination);
+          pad.start(now); pad.stop(now + 0.55);
+        } catch (e) { /* silent */ }
+      }
+
+      var ENC_CHARS = ['@','#','%','$','&','!','?','X','7','F','9','0','1'];
+      function randomEnc() { return ENC_CHARS[Math.floor(Math.random() * ENC_CHARS.length)]; }
+
+      /* ─── Typing animation (per-instance, cancellable) ─── */
+      function typeText(text, targetEl, onDone) {
+        cancelTyping();
+        var clean = '';
+        var i = 0;
+        var total = text.length;
+
+        function step() {
+          if (i >= total) {
+            if (onDone) onDone();
+            return;
+          }
+          var ch = text[i];
+          var flashes = Math.floor(Math.random() * 3) + 1;
+          var flashIdx = 0;
+
+          function flashStep() {
+            if (flashIdx < flashes) {
+              targetEl.textContent = clean + randomEnc();
+              flashIdx++;
+              typingTimer = setTimeout(flashStep, 20 + Math.random() * 18);
+            } else {
+              clean += ch;
+              targetEl.textContent = clean;
+              i++;
+              playKeySound();
+              var delay = 30 + Math.random() * 55;
+              if (ch === '.' || ch === '!' || ch === '?' || ch === ',') delay += 130;
+              typingTimer = setTimeout(step, delay);
+            }
+          }
+          flashStep();
+        }
+        step();
+      }
+
+      function cancelTyping() {
+        if (typingTimer) { clearTimeout(typingTimer); typingTimer = null; }
+      }
+
+      /* ─── Message rendering ─── */
+      function addMessageBubble(role, prefix) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'msg-' + role;
+
+        var pre = document.createElement('span');
+        pre.className = 'msg-prefix';
+        pre.textContent = prefix;
+        wrapper.appendChild(pre);
+
+        var content = document.createElement('span');
+        content.className = 'msg-content';
+        wrapper.appendChild(content);
+
+        bodyEl.appendChild(wrapper);
+        scrollToBottom();
+        return content;
+      }
+
+      function addLoadingMsg(text) {
+        var el = document.createElement('div');
+        el.className = 'msg-loading';
+        el.textContent = text;
+        bodyEl.appendChild(el);
+        scrollToBottom();
+        return el;
+      }
+
+      function clearBody() {
+        cancelTyping();
+        bodyEl.innerHTML = '';
+      }
+
+      /* ─── Loading sequence ─── */
+      function showLoading(callback) {
+        isLoading = true;
+        inputEl.disabled = true;
+        sendBtn.disabled = true;
+        loadingBar.style.display = 'block';
+
+        var steps = [
+          'Initializing secure channel...',
+          'Authenticating API key...',
+          'Loading model ' + MODEL + '...',
+          'Processing request...',
+          'Generating response...'
+        ];
+        var idx = 0;
+        var loadingEls = [];
+
+        function nextStep() {
+          if (idx >= steps.length) { callback(); return; }
+          var el = addLoadingMsg(steps[idx]);
+          loadingEls.push(el);
+          idx++;
+          setTimeout(nextStep, 350 + Math.random() * 400);
+        }
+        nextStep();
+      }
+
+      function hideLoading() {
+        isLoading = false;
+        inputEl.disabled = false;
+        sendBtn.disabled = false;
+        loadingBar.style.display = 'none';
+
+        // remove loading messages
+        var loaders = bodyEl.querySelectorAll('.msg-loading');
+        for (var i = 0; i < loaders.length; i++) loaders[i].remove();
+        scrollToBottom();
+      }
+
+      /* ─── API call ─── */
+      function callOpenRouter(userMsg, callback) {
+        conversation.push({ role: 'user', content: userMsg });
+
+        var body = JSON.stringify({
+          model: MODEL,
+          messages: conversation,
+          max_tokens: 600
+        });
+
+        fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + OPENROUTER_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: body
+        })
+        .then(function (res) {
+          if (!res.ok) throw new Error('API error: ' + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          var reply = (data.choices && data.choices[0] && data.choices[0].message)
+            ? data.choices[0].message.content
+            : '[No response]';
+          conversation.push({ role: 'assistant', content: reply });
+          callback(null, reply);
+        })
+        .catch(function (err) {
+          callback(err, null);
+        });
+      }
+
+      /* ─── Submit user message ─── */
+      function submitMessage() {
+        if (isLoading) return;
+        var msg = inputEl.value.trim();
+        if (!msg) return;
+        inputEl.value = '';
+
+        // render user message
+        addMessageBubble('user', '>').textContent = msg;
+        scrollToBottom();
+
+        // leave a blank line before AI
+        bodyEl.appendChild(document.createElement('br'));
+        scrollToBottom();
+
+        showLoading(function () {
+          callOpenRouter(msg, function (err, reply) {
+            hideLoading();
+
+            if (err) {
+              var errEl = addMessageBubble('ai', 'Claude>');
+              errEl.textContent = 'Connection lost. Retry? [' + err.message + ']';
+              playCompletionSound();
+              return;
+            }
+
+            var aiContent = addMessageBubble('ai', 'Claude>');
+            typeText(reply, aiContent, function () {
+              playCompletionSound();
+              inputEl.focus();
+            });
+          });
+        });
+      }
+
+      /* ─── Initial fact + welcome ─── */
+      function showFactThenPrompt() {
+        clearBody();
+
+        var factEl = addMessageBubble('ai', 'Claude>');
+        var fact = nextFact();
+
+        typeText(fact, factEl, function () {
+          playCompletionSound();
+          inputEl.focus();
+        });
+      }
+
+      /* ─── Open / Close ─── */
+      function openTerminal() {
+        if (isOpen) { closeTerminal(); return; }
+        isOpen = true;
+        conversation = [];
+        terminal.classList.add('open');
+        showFactThenPrompt();
+      }
+
+      function closeTerminal() {
+        if (!isOpen) return;
+        isOpen = false;
+        cancelTyping();
+        isLoading = false;
+        terminal.classList.remove('open');
+        loadingBar.style.display = 'none';
+        inputEl.disabled = false;
+        sendBtn.disabled = false;
+        inputEl.value = '';
+        clearBody();
+        conversation = [];
+      }
+
+      /* ─── Event listeners ─── */
+      icon.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openTerminal();
+      });
+
+      sendBtn.addEventListener('click', function () {
+        submitMessage();
+      });
+
+      inputEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          submitMessage();
+        }
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          closeTerminal();
+        }
+      });
+
+      document.addEventListener('click', function (e) {
+        if (!isOpen) return;
+        if (!terminal.contains(e.target) && e.target !== icon && !icon.contains(e.target)) {
+          closeTerminal();
+        }
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && isOpen && document.activeElement !== inputEl) {
+          closeTerminal();
+        }
+      });
+
+      /* ─── Resize guard ─── */
+      function clampPosition() {
+        var rect = terminal.getBoundingClientRect();
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        var style = terminal.style;
+        if (rect.right > vw - 8) style.right = '8px';
+        else style.right = '28px';
+        if (rect.bottom > vh - 8) { style.bottom = '110px'; style.top = 'auto'; }
+        if (rect.top < 8) { style.top = '8px'; style.bottom = 'auto'; }
+      }
+
+      window.addEventListener('resize', function () {
+        if (isOpen) clampPosition();
+      });
+
+      clampPosition();
+
+    })();
+    </script>
+    <!-- /Claude Floating Assistant -->
+
   </body>
 </html>
